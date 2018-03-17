@@ -1,2 +1,2 @@
-# dual ball game using socket.io
+# Dual Online Ball Game Using Socket.io
 
