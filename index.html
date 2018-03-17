@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Gamedev Canvas Workshop</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+</head>
+ <style>
+    	* { padding: 0; margin: 0; }
+    	canvas { background: #eee; display: block; margin: 0 auto; }
+    </style>
+<body>
+<button onclick="start()">start</button>
+<button onclick="stop()">stop</button>
+<button onclick="reload()">restart</button>
+<input id="getname" type="text" name="Name">
+<button onclick="getname()">submit</button>
+<div id="playerName"></div>
+<div id="players"></div>
+<canvas id="myCanvas" width="480" height="320"></canvas>
+<h1 id="over" style="display: none">game over</h1>
+<script>
+
+var socket = io();
+//var name = prompt("請輸入暱稱","guest");
+
+var canvas = document.getElementById("myCanvas");
+var ctx = canvas.getContext("2d");
+var ballRadius = 10;
+var x = canvas.width/2;
+var y = canvas.height-30;
+var dx = 2;
+var dy = -2;
+var paddleHeight = 10;
+var paddleWidth = 105;
+var ApaddleX = (canvas.width-paddleWidth)/2;
+var BpaddleX = (canvas.width-paddleWidth)/2;
+var rightPressed = false;
+var leftPressed = false;
+var player = '' ;
+var whoMove;
+var startNum = 1;
+var score = {
+
+scoreA : 0 ,
+
+scoreB : 0 
+
+}
+
+
+document.addEventListener("keydown", keyDownHandler, false);
+document.addEventListener("keyup", keyUpHandler, false);
+
+
+
+socket.on('showPlayers',function(players){
+
+$('#players').empty();
+
+let i = 0
+
+while(players[i]){
+$('#players').append('玩家 :'+players[i].username+'-'+players[i].paddle+'<br>');
+i++;
+}
+
+});
+
+
+socket.on('add user',function(usr){
+
+//$('#playerName').append('玩家 :'+usr.username+'-'+usr.id+'<br>');
+
+});
+
+
+
+
+socket.on('player',function(player){
+
+sessionStorage.setItem('player',player.paddle);
+ console.log(player);
+
+});
+
+
+socket.on('full',function(){			//客滿了
+
+	x = (canvas.width)/2;
+ 	y = (canvas.height)/2;
+ 	dx = 0;
+ 	dy = 0;
+ 	rightPressed = false ;
+ 	leftPressed  = false ;
+ 	socket.emit("draw",{
+	 	x:x,
+	 	y:y,
+	 	dx:dx,
+	 	dy:dy,
+	 	rightPressed:rightPressed,
+	 	leftPressed:leftPressed
+	 });
+ 	socket.disconnect();
+	alert('full');
+	
+});
+
+
+socket.on('reload',function(){
+	console.log('reload');
+	score.scoreA = 0
+	score.scoreB = 0;
+	//window.location.reload();
+
+});
+
+
+socket.on('score',function(whoScore){
+
+ if(whoScore==='A'){
+
+ 	score.scoreA+=0.5;
+
+ }else if(whoScore==='B'){
+
+ 	score.scoreB+=0.5;
+
+ }
+
+});
+
+socket.on('whoWin',function(whoWins){
+
+alert(whoWins);
+
+});
+
+
+socket.on('over',function(){
+
+document.getElementById("over").style.display='block';
+
+});
+
+
+socket.on('movePaddle',function(dir){
+
+var playerid =  sessionStorage.getItem('player');
+//if(playerid!==dir.playerid){
+  if(dir.playerid){
+	switch(dir.move){
+		case 'right':
+			rightPressed =true;
+			break;
+		case 'left':
+		 	leftPressed = true;
+		    break;
+		case 'Rstop':
+			rightPressed = false;
+			break;
+		case 'Lstop':
+			leftPressed =  false;
+			break;
+	}
+}
+if(dir.playerid==='A'){
+
+	whoMove = 'A';
+
+}else if(dir.playerid==='B'){
+
+	whoMove = 'B';
+
+}
+
+});
+
+
+function getname(){
+
+var name = $('#getname').val();
+socket.emit("add user",name);
+
+}
+
+
+
+function start(){
+
+socket.emit('start',startNum);//叫別人出發
+
+
+startNum += 1;
+};
+
+
+function stop(){
+
+ socket.emit('stop');
+
+
+};
+
+
+function keyDownHandler(e) {
+	var playerid = sessionStorage.getItem('player');
+    if(e.keyCode == 39) {
+        //rightPressed = true;
+        //socket.emit('move','right');
+        socket.emit('move',{playerid:playerid,move:'right'});
+    }
+    else if(e.keyCode == 37) {
+        //leftPressed = true;
+        //socket.emit('move','left');
+       socket.emit('move',{playerid:playerid,move:'left'});
+    }
+}
+
+function keyUpHandler(e) {
+	var playerid = sessionStorage.getItem('player')
+    if(e.keyCode == 39) {
+        
+        socket.emit('move',{playerid:playerid,move:'Rstop'});
+    }
+    else if(e.keyCode == 37) {
+       
+        socket.emit('move',{playerid:playerid,move:'Lstop'});
+    }
+}
+
+function drawPaddleA() {
+
+   
+    ctx.beginPath();
+    ctx.rect(ApaddleX, canvas.height-paddleHeight, paddleWidth, paddleHeight);
+    ctx.fillStyle = "#0095DD";
+    ctx.fill();
+    ctx.closePath();
+
+}
+
+function drawPaddleB() {
+	
+    ctx.beginPath();
+    ctx.rect(BpaddleX, 0, paddleWidth, paddleHeight);
+    ctx.fillStyle = "#0095DD";
+    ctx.fill();
+    ctx.closePath();
+
+}
+
+
+
+function drawBall() {
+    ctx.beginPath();
+    ctx.arc(x, y, ballRadius, 0, Math.PI*2);
+    ctx.fillStyle = "#0095DD";
+    ctx.fill();
+    ctx.closePath();
+}
+
+function drawScoreA(){
+
+	ctx.font = "16px Arial";
+    ctx.fillStyle = "#adadad";
+    ctx.fillText(score.scoreA, canvas.width/2, canvas.height/2+16);
+
+}
+
+
+function drawScoreB(){
+
+	ctx.font = "16px Arial";
+    ctx.fillStyle = "#adadad";
+    ctx.fillText(score.scoreB, canvas.width/2, canvas.height/2-16);
+	
+}
+
+
+
+
+function draw() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBall();
+    drawPaddleA();
+    drawPaddleB();
+    drawScoreA();
+    drawScoreB();
+
+	if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
+        dx = -dx;
+    }
+
+	if(y + dy > canvas.height-ballRadius){
+
+		if(x > ApaddleX && x < ApaddleX + paddleWidth){
+			 dy = -dy;
+		}else{
+			//socket.emit('over');
+	        //return;
+	        socket.emit('score','B');
+	         dy = -dy;
+
+		}
+
+	}else if( y + dy < ballRadius){
+
+		if(x > BpaddleX && x < BpaddleX + paddleWidth){
+			 dy = -dy;
+		}else{
+
+			//socket.emit('over');
+			socket.emit('score','A');
+	        //return;
+	         dy = -dy;
+
+		}
+	}
+
+	if(whoMove==='A'){
+
+	    if(rightPressed && ApaddleX < canvas.width-paddleWidth) {
+
+	   
+	        ApaddleX += 7;
+	       
+	    }
+	    else if(leftPressed && ApaddleX > 0) {
+	        ApaddleX -= 7;
+	        
+	    }
+
+	}else if(whoMove ==='B'){
+
+
+		if(rightPressed && BpaddleX < canvas.width-paddleWidth) {
+	        
+	        BpaddleX += 7;
+	      
+	    
+	    }else if(leftPressed && BpaddleX > 0) {
+	        BpaddleX -= 7;
+	       
+	    }
+
+	}
+		x += dx;
+	    y += dy;
+}
+
+
+
+socket.on('fresh',function(){
+	draw();
+});
+
+
+
+function reload(){
+ 	
+ 	socket.emit('reload');
+	
+}
+
+</script>
+</body>
+</html>
