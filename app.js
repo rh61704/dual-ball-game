@@ -1,4 +1,5 @@
-var app = require('express')();
+var express = require('express');
+var app = express();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
 
@@ -6,6 +7,8 @@ server.listen(process.env.PORT || 8000, process.env.IP || "0.0.0.0", function(){
   var addr = server.address();
   console.log("Server listening at", addr.address + ":" + addr.port);
 });
+
+app.use(express.static('assets'));
 
 app.get('/', function (req, res) {
   res.sendfile(__dirname + '/index.html');
@@ -25,20 +28,19 @@ var player = function(){
 var connectNum=0
 var scoreA = 0;
 var scoreB = 0;
-var timer;
+var timer = null;
 
 
 io.on('connection', function(socket){
 
 	connectNum++;
 
-	if(connectNum>2){
+	if(players.length>2){
 		console.log('full');
 		socket.join('full');
     	io.sockets.in('full').emit('full');
     	//socket.disconnect(true);
 	}
-
 
 	socket.on('add user',function(msg){
 
@@ -50,36 +52,40 @@ io.on('connection', function(socket){
         if(players.length===0){
 
 	     	var playerA = new player();
-
-	    	playerA.paddle = 'A';
+	     	socket.paddle='A';
+	    	playerA.paddle = socket.paddle;
 	    	playerA.username = socket.username;
 	    	players.push(playerA);
 	    	console.log('a');
 	    	socket.join('playerA');
 	     
-	     io.sockets.in('playerA').emit('player',playerA);
-	     
-	     io.emit('add user',{
-            username: socket.username,
-            id :  playerA.paddle
-        });
+		    io.sockets.in('playerA').emit('player',playerA);
+		     
+		    io.emit('add user',{
+	            username: socket.username,
+	            id :  playerA.paddle
+	        });
+
+	        socket.leave('playerA');
 
     	}else if(players.length===1){
 
     		var playerB = new player();
-
-	    	playerB.paddle = 'B';
+    		socket.paddle='B'
+	    	playerB.paddle = socket.paddle;
 	    	playerB.username = socket.username;
 	    	players.push(playerB);
 	    	console.log('b');
-	    socket.join('playerB');
-	   
-	    io.sockets.in('playerB').emit('player',playerB);
+		    socket.join('playerB');
+		   
+		    io.sockets.in('playerB').emit('player',playerB);
 
-        io.emit('add user',{
-            username: socket.username,
-            id :  playerB.paddle
-        });
+	        io.emit('add user',{
+	            username: socket.username,
+	            id :  playerB.paddle
+	        });
+
+	        socket.leave('playerB');
 
     	}else{
 
@@ -100,8 +106,22 @@ io.on('connection', function(socket){
 	  if(connectNum<2){
 	  	scoreA = 0;
 	  	scoreB = 0;
-		empty();
 		io.emit('reload');
+		clearInterval(timer);
+		io.emit('whoLeave',socket.username);
+		players=players.filter(player => player.username!==socket.username);
+		players=players.map(function(rest){
+
+			var newPlayer = new player();
+			newPlayer.paddle = 'A'
+			newPlayer.username = rest.username
+			return newPlayer;
+
+		});
+
+		//io.emit('player',players[0]);
+		io.emit('showPlayers',players);
+		//io.emit('showPlayers',players);
 		//socket.disconnect(true);
 	   }
 	});
@@ -110,7 +130,11 @@ io.on('connection', function(socket){
     
 	 socket.on('start',function(startNum){
 	 	
-	 	timer = setInterval(fresh,10);
+	  if(timer!==null){
+	  	clearInterval(timer);
+	  }
+
+	  timer = setInterval(fresh,10);
 
 	});
 
@@ -149,22 +173,22 @@ io.on('connection', function(socket){
 
 	 		if(scoreA<10){
 
-	 		scoreA+=0.5;
+	 		scoreA+=1;
 	 		io.emit('score',whoScore);
 
 	 		}else{
 	 		clearInterval(timer);
-	 		io.emit('whoWin','A wins !');
+	 		io.emit('whoWin','A');
 
 	 		}
 
 	 	}else if(whoScore==='B'){
 	 	   if(scoreB<10){
-	 		scoreB+=0.5;
+	 		scoreB+=1;
 	 		io.emit('score',whoScore);
 	 	}else{
 	 		clearInterval(timer);
-	 		io.emit('whoWin','B wins !');
+	 		io.emit('whoWin','B');
 	 	}
 
 	 	}
@@ -189,24 +213,24 @@ io.on('connection', function(socket){
 	});
 
 	
-});
+	});
 
 
 
 
-function fresh(){
+	function fresh(){
 
-if(connectNum===2){
-io.emit('fresh');
-}
+	if(connectNum===2){
+	io.emit('fresh');
+	}
 
-}
+	}
 
-function empty(){
+	function empty(){
 
-players.length = 0;
+	players.length = 0;
 
-};
+	};
 
 
 

@@ -3,8 +3,10 @@
 <head>
     <meta charset="utf-8" />
     <title>Gamedev Canvas Workshop</title>
+  <link rel="stylesheet" href="http://localhost:8000/semantic.min.css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+  <script  src="http://localhost:8000/semantic.min.js"></script>
 </head>
  <style>
     	* { padding: 0; margin: 0; }
@@ -13,14 +15,51 @@
 <body>
 <button onclick="start()">start</button>
 <button onclick="stop()">stop</button>
-<button onclick="reload()">restart</button>
-<input id="getname" type="text" name="Name">
-<button onclick="getname()">submit</button>
 <div id="playerName"></div>
 <div id="players"></div>
 <canvas id="myCanvas" width="480" height="320"></canvas>
-<h1 id="over" style="display: none">game over</h1>
+
+
+<div class="ui small modal" id="starter" style="text-align: center;">
+  
+  <div class="header">dual ball game</div>
+  <div class="content" style="padding: 30px;">
+  	<div class="ui form">
+	    <input id="getname" type="text" name="Name" placeholder="請輸入姓名" style="display: 
+	    block">
+    </div>
+  </div>
+
+  <div class="actions" style="text-align: center;">
+    <div class="ui large button" id="getname" onclick="getname()">submit</div>
+  </div>
+
+</div>
+
+
+<div class="ui small modal" id="gameover" style="text-align: center;">
+  <div class="content" style="padding: 30px;">
+  	<h1 id="win" ></h1>
+  </div>
+
+  <div class="actions" style="text-align: center;">
+    <div class="ui large button" id="restart" onclick="reload()">restart</div>
+  </div>
+</div>
+
+<div class="ui small modal" id="fullAlert" style="text-align: center;">
+  <div class="content" style="padding: 30px;">
+  	<h1 >玩家已滿，請刷新或重新進入</h1>
+  </div>
+
+  <div class="actions" style="text-align: center;">
+    <div class="ui large button" id="full" >ok</div>
+  </div>
+</div>
+
 <script>
+
+
 
 var socket = io();
 //var name = prompt("請輸入暱稱","guest");
@@ -49,6 +88,27 @@ scoreB : 0
 
 }
 
+$(document).ready(function(){
+
+enterName();
+
+});
+
+
+function enterName(){
+
+	$('#starter')
+	.modal({blurring: true})
+	.modal('show')
+	.modal({
+
+		selector:{
+	 		close  : '#getname',
+		}
+
+	});
+};
+
 
 document.addEventListener("keydown", keyDownHandler, false);
 document.addEventListener("keyup", keyUpHandler, false);
@@ -68,25 +128,37 @@ i++;
 
 });
 
+socket.on('whoLeave',function(name){
 
-socket.on('add user',function(usr){
-
-//$('#playerName').append('玩家 :'+usr.username+'-'+usr.id+'<br>');
+	sessionStorage.removeItem('player');
+	sessionStorage.setItem('player','A');
+	alert(name+'已離開遊戲');
 
 });
-
-
-
 
 socket.on('player',function(player){
 
 sessionStorage.setItem('player',player.paddle);
- console.log(player);
+console.log(player);
 
 });
 
 
 socket.on('full',function(){			//客滿了
+
+	socket.disconnect();
+
+	$('#starter').remove();
+	$('#fullAlert')
+	.modal({blurring: true})
+	.modal('show')
+	.modal({
+
+		selector:{
+	 		close  : '#full',
+		}
+
+	});
 
 	x = (canvas.width)/2;
  	y = (canvas.height)/2;
@@ -102,16 +174,22 @@ socket.on('full',function(){			//客滿了
 	 	rightPressed:rightPressed,
 	 	leftPressed:leftPressed
 	 });
- 	socket.disconnect();
-	alert('full');
 	
 });
 
 
 socket.on('reload',function(){
+
+	$('.ui.modal #win').empty();
+    $('#gameover').modal('hide');
 	console.log('reload');
-	score.scoreA = 0
+	x = (canvas.width)/2;
+ 	y = (canvas.height)/2;
+ 	ApaddleX = (canvas.width-paddleWidth)/2;
+    BpaddleX = (canvas.width-paddleWidth)/2;
+	score.scoreA = 0;
 	score.scoreB = 0;
+	draw();
 	//window.location.reload();
 
 });
@@ -121,22 +199,42 @@ socket.on('score',function(whoScore){
 
  if(whoScore==='A'){
 
- 	score.scoreA+=0.5;
+ 	score.scoreA+=1;
 
  }else if(whoScore==='B'){
 
- 	score.scoreB+=0.5;
+ 	score.scoreB+=1;
 
  }
 
 });
 
+
 socket.on('whoWin',function(whoWins){
 
-alert(whoWins);
+if(whoWins==='A'){
+	$('.ui.modal #win').prepend('<b>A wins !</b>');
+}else{
+	$('.ui.modal #win').prepend('<b>B wins !</b>');
+}
+
+$('#gameover')
+	.modal({blurring: true})
+	.modal('show')
+	.modal({
+		selector:{
+	 		close  : '#restart',
+		}
+
+	});
 
 });
 
+socket.on('disconnected',function(){
+
+	socket.emit('delPlayer',sessionStorage.getItem('player'));
+
+});
 
 socket.on('over',function(){
 
@@ -191,8 +289,8 @@ function start(){
 
 socket.emit('start',startNum);//叫別人出發
 
-
 startNum += 1;
+
 };
 
 
@@ -283,6 +381,8 @@ function drawScoreB(){
 
 function draw() {
 
+	let playerid =  sessionStorage.getItem('player');
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBall();
     drawPaddleA();
@@ -301,7 +401,9 @@ function draw() {
 		}else{
 			//socket.emit('over');
 	        //return;
+	        if(playerid==='B'){
 	        socket.emit('score','B');
+	   		 }	
 	         dy = -dy;
 
 		}
@@ -312,27 +414,25 @@ function draw() {
 			 dy = -dy;
 		}else{
 
-			//socket.emit('over');
+			if(playerid==='A'){
+			
 			socket.emit('score','A');
-	        //return;
-	         dy = -dy;
 
+			}	        //return;
+	         dy = -dy;
 		}
 	}
 
 	if(whoMove==='A'){
 
 	    if(rightPressed && ApaddleX < canvas.width-paddleWidth) {
-
-	   
+ 
 	        ApaddleX += 7;
 	       
 	    }
 	    else if(leftPressed && ApaddleX > 0) {
-	        ApaddleX -= 7;
-	        
+	        ApaddleX -= 7;        
 	    }
-
 	}else if(whoMove ==='B'){
 
 
@@ -342,10 +442,8 @@ function draw() {
 	      
 	    
 	    }else if(leftPressed && BpaddleX > 0) {
-	        BpaddleX -= 7;
-	       
+	        BpaddleX -= 7;	       
 	    }
-
 	}
 		x += dx;
 	    y += dy;
@@ -360,7 +458,7 @@ socket.on('fresh',function(){
 
 
 function reload(){
- 	
+
  	socket.emit('reload');
 	
 }
